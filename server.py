@@ -51,5 +51,39 @@ async def data_message(sid, data):
     await sio.emit("message", data, skip_sid=sid, namespace="/data")
 
 
+# ----- /vision-channel-1 Namespace -----
+@sio.event(namespace="/vision-channel-1")
+async def connect(sid, environ):
+    print(f"[VISION-CHANNEL-1] Client connected: {sid}")
+
+
+@sio.event(namespace="/vision-channel-1")
+async def disconnect(sid):
+    print(f"[VISION-CHANNEL-1] Client disconnected: {sid}")
+
+
+@sio.on("message", namespace="/vision-channel-1")
+async def data_channel_1_message(sid, data):
+    print(f"[VISION-CHANNEL-1] Received from {sid}: {data}")
+    await sio.emit("message", data, skip_sid=sid, namespace="/vision-channel-1")
+
+
+# ----- /vision-channel-2 Namespace -----
+@sio.event(namespace="/vision-channel-2")
+async def connect(sid, environ):
+    print(f"[VISION-CHANNEL-2] Client connected: {sid}")
+
+
+@sio.event(namespace="/vision-channel-2")
+async def disconnect(sid):
+    print(f"[VISION-CHANNEL-2] Client disconnected: {sid}")
+
+
+@sio.on("message", namespace="/vision-channel-2")
+async def data_channel_2_message(sid, data):
+    print(f"[VISION-CHANNEL-2] Received from {sid}: {data}")
+    await sio.emit("message", data, skip_sid=sid, namespace="/vision-channel-2")
+
+
 if __name__ == "__main__":
     web.run_app(app, port=7000)

@@ -8,10 +8,10 @@ class Node:
         self.url = url
         self.sio = AsyncClient()
 
-    async def connect(self):
-        # Connect to the server for both namespaces: /control and /data.
-        await self.sio.connect(self.url, namespaces=["/control", "/data"])
-        print(f"Connected to {self.url} on namespaces /control and /data")
+    async def connect(self, namespaces: list):
+        # Connect to the server for the specified namespaces.
+        await self.sio.connect(self.url, namespaces=namespaces)
+        print(f"Connected to {self.url} on namespaces {', '.join(namespaces)}")
 
     async def publish(self, namespace: str, data: dict):
         # Publish a message on the specified namespace using event "message".
@@ -32,8 +32,10 @@ async def main():
     node1 = Node(server_url)
     node2 = Node(server_url)
 
+    channels = ["/control", "/vision-channel-1", "/vision-channel-2", "/data"]
+
     # Connect both nodes to the server.
-    await asyncio.gather(node1.connect(), node2.connect())
+    await asyncio.gather(node1.connect(channels), node2.connect(channels))
 
     # ---- Setup for Node1 ----
     # Node1: Publish on /control and subscribe on /data.
