@@ -1,73 +1,89 @@
-import asyncio, json, uuid
-from aiohttp import web, WSMsgType
+import socketio
+from aiohttp import web
 
-clients = {}  # client_id -> WebSocketResponse
-peer_channels = {}  # client_id -> list of channels
-
-
-async def websocket_handler(request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-
-    client_id = str(uuid.uuid4())
-    clients[client_id] = ws
-    peer_channels[client_id] = []
-    print(f"[SERVER] Client connected: {client_id}")
-
-    try:
-        async for msg in ws:
-            if msg.type != WSMsgType.TEXT:
-                continue
-            data = json.loads(msg.data)
-            t = data.get("type")
-
-            if t == "register":
-                # record channels and notify all others of new peer
-                peer_channels[client_id] = data["channels"]
-                for oid, ows in clients.items():
-                    if oid != client_id and not ows.closed:
-                        await ows.send_json({"type": "peer", "peer_id": client_id})
-                # also tell the newcomer about existing peers
-                for oid in clients:
-                    if oid != client_id:
-                        await ws.send_json({"type": "peer", "peer_id": oid})
-
-            elif t in ("offer", "answer", "candidate"):
-                target = data["target_id"]
-                if target in clients and not clients[target].closed:
-                    payload = {"type": t}
-                    # unify field name
-                    payload[t] = data[t] if t != "candidate" else data["candidate"]
-                    payload["source_id"] = client_id
-                    await clients[target].send_json(payload)
-
-            elif t == "message":
-                ch = data["channel"]
-                for pid, chans in peer_channels.items():
-                    if pid != client_id and ch in chans and not clients[pid].closed:
-                        await clients[pid].send_json(
-                            {
-                                "type": "message",
-                                "channel": ch,
-                                "message": data["message"],
-                                "source_id": client_id,
-                            }
-                        )
-
-    finally:
-        print(f"[SERVER] Client disconnected: {client_id}")
-        del clients[client_id], peer_channels[client_id]
-        for ows in clients.values():
-            if not ows.closed:
-                await ows.send_json({"type": "peer_disconnect", "peer_id": client_id})
-        await ws.close()
-
-    return ws
-
-
+# Create an asynchronous Socket.IO server using aiohttp.
+sio = socketio.AsyncServer(async_mode="aiohttp")
 app = web.Application()
-app.router.add_get("/ws", websocket_handler)
-app.router.add_get("/", lambda r: web.Response(text="Signaling server running"))
+sio.attach(app)
+
+
+async def index(request):
+    return web.Response(text="Socket.IO Server is Running", content_type="text/html")
+
+
+# Add the route using the app's router.
+app.router.add_get("/", index)
+
+
+# ----- /control Namespace -----
+@sio.event(namespace="/control")
+async def connect(sid, environ):
+    print(f"[CONTROL] Client connected: {sid}")
+
+
+@sio.event(namespace="/control")
+async def disconnect(sid):
+    print(f"[CONTROL] Client disconnected: {sid}")
+
+
+@sio.on("message", namespace="/control")
+async def control_message(sid, data):
+    print(f"[CONTROL] Received from {sid}: {data}")
+    # Broadcast the message to all other clients in /control.
+    await sio.emit("message", data, skip_sid=sid, namespace="/control")
+
+
+# ----- /data Namespace -----
+@sio.event(namespace="/data")
+async def connect(sid, environ):
+    print(f"[DATA] Client connected: {sid}")
+
+
+@sio.event(namespace="/data")
+async def disconnect(sid):
+    print(f"[DATA] Client disconnected: {sid}")
+
+
+@sio.on("message", namespace="/data")
+async def data_message(sid, data):
+    print(f"[DATA] Received from {sid}: {data}")
+    # Broadcast the message to all other clients in /data.
+    await sio.emit("message", data, skip_sid=sid, namespace="/data")
+
+
+# ----- /vision-channel-1 Namespace -----
+@sio.event(namespace="/vision-channel-1")
+async def connect(sid, environ):
+    print(f"[VISION-CHANNEL-1] Client connected: {sid}")
+
+
+@sio.event(namespace="/vision-channel-1")
+async def disconnect(sid):
+    print(f"[VISION-CHANNEL-1] Client disconnected: {sid}")
+
+
+@sio.on("message", namespace="/vision-channel-1")
+async def data_channel_1_message(sid, data):
+    print(f"[VISION-CHANNEL-1] Received from {sid}: {data}")
+    await sio.emit("message", data, skip_sid=sid, namespace="/vision-channel-1")
+
+
+# ----- /vision-channel-2 Namespace -----
+@sio.event(namespace="/vision-channel-2")
+async def connect(sid, environ):
+    print(f"[VISION-CHANNEL-2] Client connected: {sid}")
+
+
+@sio.event(namespace="/vision-channel-2")
+async def disconnect(sid):
+    print(f"[VISION-CHANNEL-2] Client disconnected: {sid}")
+
+
+@sio.on("message", namespace="/vision-channel-2")
+async def data_channel_2_message(sid, data):
+    print(f"[VISION-CHANNEL-2] Received from {sid}: {data}")
+    await sio.emit("message", data, skip_sid=sid, namespace="/vision-channel-2")
+
 
 if __name__ == "__main__":
     web.run_app(app, port=7000)
